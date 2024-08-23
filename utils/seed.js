@@ -1,15 +1,16 @@
 const connection = require('../config/connection');
-const { User, Video } = require('../models');
-const { getRandomName, getRandomVideos } = require('./data');
+const { User, Thought } = require('../models');
+const { getRandomName, getRandomThought } = require('./data');
 
 connection.on('error', (err) => err);
 
 connection.once('open', async () => {
   console.log('connected');
+
   // Delete the collections if they exist
-  let videoCheck = await connection.db.listCollections({ name: 'videos' }).toArray();
-  if (videoCheck.length) {
-    await connection.dropCollection('videos');
+  let thoughtCheck = await connection.db.listCollections({ name: 'thoughts' }).toArray();
+  if (thoughtCheck.length) {
+    await connection.dropCollection('thoughts');
   }
 
   let userCheck = await connection.db.listCollections({ name: 'users' }).toArray();
@@ -18,26 +19,52 @@ connection.once('open', async () => {
   }
 
   const users = [];
-  const videos = getRandomVideos(10);
+  const thoughts = [];
 
+  // Generate 20 users
   for (let i = 0; i < 20; i++) {
-    const fullName = getRandomName();
-    const first = fullName.split(' ')[0];
-    const last = fullName.split(' ')[1];
+    const username = getRandomName().toLowerCase().replace(' ', '');
+    const email = `${username}@example.com`;
 
     users.push({
-      first,
-      last,
-      age: Math.floor(Math.random() * (99 - 18 + 1) + 18),
+      username,
+      email,
+      thoughts: [],
+      friends: [],
     });
   }
 
-  await User.insertMany(users);
-  await Video.insertMany(videos);
+  // Insert users into the database
+  const createdUsers = await User.insertMany(users);
 
-  // loop through the saved videos, for each video we need to generate a video response and insert the video responses
-  console.table(users);
-  console.table(videos);
+  // Generate 10 thoughts and randomly associate them with users
+  for (let i = 0; i < 10; i++) {
+    const thoughtText = getRandomThought();
+    const randomUserIndex = Math.floor(Math.random() * createdUsers.length);
+    const userId = createdUsers[randomUserIndex]._id;
+
+    const newThought = await Thought.create({ thoughtText, username: createdUsers[randomUserIndex].username });
+
+    // Add the thought to the user's thoughts array
+    await User.findByIdAndUpdate(userId, { $addToSet: { thoughts: newThought._id } });
+
+    thoughts.push(newThought);
+  }
+
+  // Randomly assign friends to each user
+  for (let i = 0; i < createdUsers.length; i++) {
+    const userId = createdUsers[i]._id;
+    const friendsToAdd = createdUsers
+      .filter((_, index) => index !== i) // Exclude the user itself from the list of potential friends
+      .slice(0, Math.floor(Math.random() * 5)); // Select up to 5 friends randomly
+
+    const friendIds = friendsToAdd.map(friend => friend._id);
+
+    await User.findByIdAndUpdate(userId, { $addToSet: { friends: { $each: friendIds } } });
+  }
+
+  console.table(createdUsers);
+  console.table(thoughts);
   console.info('Seeding complete! 🌱');
   process.exit(0);
 });
