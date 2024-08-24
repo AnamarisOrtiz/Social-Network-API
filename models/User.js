@@ -37,7 +37,7 @@ const userSchema = new Schema(
 );
   
 
-// Create a virtual property `fullName` that gets and sets the user's full name
+// Create a virtual property `friendcount` 
 userSchema
   .virtual('friendCount')
   // Getter
